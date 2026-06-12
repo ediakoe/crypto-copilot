@@ -275,9 +275,34 @@ function attachButton(tweet) {
     projectItem.innerText = "🚀 Project Tweet";
   };
 
+  // CUSTOM TWEET
+  const customItem = createMenuItem("✍️ Custom Tweet");
+  customItem.onclick = async () => {
+    menu.style.display = "none";
+    const persian = prompt("متن فارسی خود را بنویس:");
+    if (!persian) return;
+    customItem.innerText = "⏳ در حال ترجمه...";
+
+    const result = await askAI(
+      "Translate the following Persian text to English for a crypto twitter post. Output ONLY the translated text, nothing else.",
+      persian
+    );
+
+    if (result) {
+      const postBtn = document.querySelector('[data-testid="SideNav_NewTweet_Button"]');
+      if (postBtn) {
+        postBtn.click();
+        await new Promise(r => setTimeout(r, 800));
+        await insertIntoComposer(result);
+      }
+    }
+    customItem.innerText = "✍️ Custom Tweet";
+  };
+
   menu.appendChild(replyItem);
   menu.appendChild(translateItem);
   menu.appendChild(projectItem);
+  menu.appendChild(customItem);
 
   menuBtn.onclick = (e) => {
     e.stopPropagation();
