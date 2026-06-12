@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Crypto Copilot",
+  "version": "1.0",
+  "description": "AI copilot for crypto replies, translations and threads on X",
+
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+
+  "permissions": [
+    "storage"
+  ],
+
+  "host_permissions": [
+    "https://x.com/*",
+    "https://openrouter.ai/*"
+  ],
+
+  "content_scripts": [
+    {
+      "matches": ["https://x.com/*"],
+      "js": ["content.js"]
+    }
+  ]
+}
