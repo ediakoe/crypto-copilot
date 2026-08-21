@@ -1,0 +1,243 @@
+/* ======================================================
+   CRYPTO COPILOT MOBILE
+   Firefox Android / X
+   ====================================================== */
+
+.cc-mobile-button {
+  appearance: none;
+  -webkit-appearance: none;
+
+  border: 0;
+  outline: none;
+
+  background: transparent;
+  color: inherit;
+
+  cursor: pointer;
+
+  width: 36px;
+  height: 36px;
+
+  min-width: 36px;
+
+  margin-left: 6px;
+  padding: 0;
+
+  border-radius: 999px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: 18px;
+
+  line-height: 1;
+
+  transition:
+    background 0.15s ease,
+    transform 0.15s ease;
+}
+
+.cc-mobile-button:hover {
+  background: rgba(29, 155, 240, 0.12);
+}
+
+.cc-mobile-button:active {
+  transform: scale(0.92);
+}
+
+
+/* ======================================================
+   MENU
+   ====================================================== */
+
+.cc-mobile-menu {
+  position: absolute;
+
+  right: 8px;
+  bottom: 48px;
+
+  z-index: 2147483647;
+
+  width: 210px;
+
+  padding: 6px;
+
+  box-sizing: border-box;
+
+  background: #16181c;
+
+  color: #e7e9ea;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.10);
+
+  border-radius: 16px;
+
+  box-shadow:
+    0 12px 40px
+    rgba(0, 0, 0, 0.50);
+
+  overflow: hidden;
+
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif;
+}
+
+
+/* ======================================================
+   MENU ITEM
+   ====================================================== */
+
+.cc-mobile-menu-item {
+
+  width: 100%;
+
+  min-height: 44px;
+
+  box-sizing: border-box;
+
+  padding:
+    12px 13px;
+
+  border-radius: 11px;
+
+  display: flex;
+
+  align-items: center;
+
+  cursor: pointer;
+
+  user-select: none;
+
+  -webkit-user-select: none;
+
+  font-size: 14px;
+
+  font-weight: 500;
+
+  line-height: 1.3;
+
+  color: #e7e9ea;
+
+  background: transparent;
+
+  transition:
+    background 0.15s ease;
+}
+
+.cc-mobile-menu-item:hover {
+  background:
+    rgba(255, 255, 255, 0.08);
+}
+
+.cc-mobile-menu-item:active {
+  background:
+    rgba(29, 155, 240, 0.16);
+}
+
+
+/* ======================================================
+   TRANSLATION BOX
+   ====================================================== */
+
+.cc-mobile-translation {
+
+  width: auto;
+
+  margin-top: 10px;
+
+  margin-left: 52px;
+
+  margin-right: 12px;
+
+  padding:
+    12px 14px;
+
+  box-sizing: border-box;
+
+  border-radius: 14px;
+
+  background:
+    rgba(29, 155, 240, 0.08);
+
+  border:
+    1px solid
+    rgba(29, 155, 240, 0.14);
+
+  color: #e7e9ea;
+
+  font-size: 14px;
+
+  line-height: 1.9;
+
+  direction: rtl;
+
+  text-align: right;
+
+  word-break: break-word;
+
+  overflow-wrap: anywhere;
+}
+
+
+/* ======================================================
+   MOBILE OPTIMIZATION
+   ====================================================== */
+
+@media (max-width: 600px) {
+
+  .cc-mobile-button {
+
+    width: 40px;
+    height: 40px;
+
+    min-width: 40px;
+
+    font-size: 19px;
+  }
+
+  .cc-mobile-menu {
+
+    width: 220px;
+
+    right: 6px;
+
+    bottom: 50px;
+
+    border-radius: 18px;
+
+    padding: 7px;
+  }
+
+  .cc-mobile-menu-item {
+
+    min-height: 48px;
+
+    padding:
+      13px 14px;
+
+    font-size: 15px;
+  }
+
+  .cc-mobile-translation {
+
+    margin-left: 12px;
+
+    margin-right: 12px;
+
+    padding:
+      13px 14px;
+
+    font-size: 15px;
+
+    line-height: 1.9;
+  }
+}
