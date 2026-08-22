@@ -3,11 +3,6 @@
   "name": "Crypto Copilot Mobile",
   "version": "1.0.0",
   "description": "AI assistant for X with Smart Reply, Translate, Thread and Custom Tweet.",
-  "icons": {
-    "16": "../icon16.png",
-    "48": "../icon48.png",
-    "128": "../icon128.png"
-  },
   "permissions": [
     "storage",
     "https://openrouter.ai/*"
