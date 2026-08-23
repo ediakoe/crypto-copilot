@@ -8,5 +8,5 @@
   "background": {"service_worker": "background.js"},
   "action": {"default_title": "Crypto Copilot — API Setup", "default_popup": "popup.html"},
   "options_ui": {"page": "popup.html", "open_in_tab": true},
-  "content_scripts": [{"matches": ["https://x.com/*", "https://twitter.com/*"], "js": ["content-v204.js"], "run_at": "document_idle"}]
+  "content_scripts": [{"matches": ["https://x.com/*", "https://twitter.com/*"], "js": ["content-v206.js"], "run_at": "document_idle"}]
 }
