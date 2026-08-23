@@ -1,0 +1,71 @@
+(() => {
+  if (window.__cryptoCopilotV202) return;
+  window.__cryptoCopilotV202 = true;
+
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[c]));
+  let activeMenu = null;
+
+  const style = document.createElement("style");
+  style.textContent = `
+    .ccp-fab{width:34px;height:34px;border:0;border-radius:999px;background:transparent;color:#fff;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font-size:17px;transition:.18s}.ccp-fab:hover{background:rgba(104,119,255,.16);transform:scale(1.08)}
+    .ccp-menu{position:fixed;z-index:2147483647;width:320px;color:#f5f7fb;background:rgba(12,15,22,.98);border:1px solid rgba(255,255,255,.11);border-radius:20px;box-shadow:0 24px 70px rgba(0,0,0,.58);overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backdrop-filter:blur(20px);animation:ccpIn .16s ease-out}@keyframes ccpIn{from{opacity:0;transform:translateY(6px) scale(.97)}to{opacity:1;transform:none}}
+    .ccp-head{padding:15px 16px;background:linear-gradient(135deg,rgba(104,119,255,.2),rgba(157,105,255,.08));border-bottom:1px solid rgba(255,255,255,.08)}.ccp-brand{display:flex;align-items:center;gap:10px;font-size:15px;font-weight:800}.ccp-logo{width:31px;height:31px;border-radius:10px;display:grid;place-items:center;background:linear-gradient(135deg,#6878ff,#9b6dff);box-shadow:0 7px 22px rgba(104,119,255,.3)}.ccp-sub{margin:4px 0 0 41px;color:#8d96a8;font-size:10px}.ccp-context{margin:10px;padding:10px;border:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.035);border-radius:13px;color:#aeb6c5;font-size:11px;line-height:1.45;max-height:58px;overflow:hidden}.ccp-section{padding:2px 16px 6px;color:#707a8d;font-size:9px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}.ccp-body{padding:8px 10px 11px}
+    .ccp-item{width:100%;display:flex;align-items:center;gap:11px;border:0;background:transparent;color:#edf0f5;text-align:left;border-radius:12px;padding:9px 10px;cursor:pointer;transition:.15s}.ccp-item:hover{background:rgba(255,255,255,.065);transform:translateX(2px)}.ccp-icon{width:31px;height:31px;border-radius:9px;background:rgba(255,255,255,.065);display:grid;place-items:center;flex:0 0 31px}.ccp-label{font-size:13px;font-weight:650}.ccp-desc{margin-top:2px;color:#7f899a;font-size:10px}.ccp-arrow{margin-left:auto;color:#687286}.ccp-divider{height:1px;background:rgba(255,255,255,.07);margin:6px 0}
+    .ccp-loading{padding:20px;text-align:center;color:#9da7b7;font-size:12px}.ccp-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#7d88ff;animation:ccpPulse 1s infinite alternate}.ccp-dot:nth-child(2){animation-delay:.18s}.ccp-dot:nth-child(3){animation-delay:.36s}@keyframes ccpPulse{to{opacity:.25;transform:translateY(-2px)}}
+    .ccp-result{margin:0 10px 10px;padding:12px;border-radius:14px;background:rgba(104,119,255,.08);border:1px solid rgba(104,119,255,.15);font-size:12px;line-height:1.6;white-space:pre-wrap;max-height:270px;overflow:auto}.ccp-actions{display:flex;gap:7px;margin-top:10px}.ccp-mini{flex:1;border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.055);color:#e3e7ef;border-radius:9px;padding:8px;cursor:pointer;font-size:11px}.ccp-mini:hover{background:rgba(255,255,255,.09)}
+    .ccp-trends{padding:10px}.ccp-trend{padding:10px;border:1px solid rgba(255,255,255,.07);border-radius:11px;background:rgba(255,255,255,.035);margin-bottom:7px;cursor:pointer}.ccp-trend:hover{background:rgba(104,119,255,.09)}.ccp-trend b{font-size:12px}.ccp-trend small{display:block;color:#7f899a;margin-top:3px;font-size:9px}.ccp-translate{margin:10px 12px 5px 52px;padding:12px 14px;border-radius:15px;background:linear-gradient(135deg,rgba(104,119,255,.1),rgba(157,105,255,.06));border:1px solid rgba(104,119,255,.14);color:#e9ecf4;direction:rtl;line-height:1.9;font-size:13px}
+  `;
+  document.documentElement.appendChild(style);
+
+  const tweetText = tweet => tweet?.querySelector('[data-testid="tweetText"]')?.innerText?.trim() || "";
+  const closeMenu = () => { activeMenu?.remove(); activeMenu = null; };
+  function position(menu, anchor){const r=anchor.getBoundingClientRect(),w=320,h=menu.offsetHeight||430;menu.style.left=`${Math.max(8,Math.min(r.left,innerWidth-w-8))}px`;menu.style.top=`${Math.max(8,Math.min(r.bottom+8,innerHeight-h-8))}px`;}
+
+  function ai(system,user="",temperature=.8){
+    return new Promise(resolve=>{
+      chrome.runtime.sendMessage({type:"CCP_AI",temperature,messages:[{role:"system",content:system},{role:"user",content:user}]},res=>{
+        if(chrome.runtime.lastError || !res?.ok){console.error("Crypto Copilot AI error",chrome.runtime.lastError?.message||res?.error);resolve(null);return} resolve(res.text||null);
+      });
+    });
+  }
+
+  const editor = () => document.querySelector('[role="dialog"] [contenteditable="true"]') || document.querySelector('[data-testid="tweetTextarea_0"][contenteditable="true"]') || document.querySelector('[data-testid="tweetTextarea_0"] [contenteditable="true"]');
+  async function waitEditor(ms=7000){const t=Date.now();while(Date.now()-t<ms){const e=editor();if(e)return e;await sleep(120)}return null;}
+  async function insertText(text){const e=await waitEditor();if(!e)return false;e.focus();try{const dt=new DataTransfer();dt.setData("text/plain",text);e.dispatchEvent(new ClipboardEvent("paste",{clipboardData:dt,bubbles:true,cancelable:true}));}catch(_){}await sleep(180);if(!e.innerText.trim())document.execCommand("insertText",false,text);e.dispatchEvent(new InputEvent("input",{bubbles:true,inputType:"insertText",data:text}));return true;}
+  const replyBtn = tweet => tweet?.querySelector('[data-testid="reply"]');
+  const newPostBtn = () => document.querySelector('[data-testid="SideNav_NewTweet_Button"]');
+
+  function item(icon,label,desc,fn){const b=document.createElement("button");b.className="ccp-item";b.innerHTML=`<span class="ccp-icon">${icon}</span><span><div class="ccp-label">${label}</div><div class="ccp-desc">${desc}</div></span><span class="ccp-arrow">›</span>`;b.onclick=fn;return b;}
+  function loading(text){return `<div class="ccp-loading">${text} <span class="ccp-dot"></span> <span class="ccp-dot"></span> <span class="ccp-dot"></span></div>`;}
+
+  async function smartReply(menu,tweet,mode){menu.innerHTML=loading("Generating");const limits={short:"under 12 words, sharp and human",smart:"under 25 words, insightful with a fresh opinion",professional:"under 25 words, credible and natural"};const result=await ai(`Write ONE ${limits[mode]} crypto Twitter reply. Do not summarize. No hashtags. Maximum 2 emojis. Output only the reply.`,tweetText(tweet),.82);if(!result){closeMenu();return}const b=replyBtn(tweet);if(!b){closeMenu();return}b.click();await sleep(500);await insertText(result);closeMenu();}
+
+  async function translate(menu,tweet){menu.innerHTML=loading("Translating");const result=await ai("Translate into natural Persian. Preserve crypto terminology, names and tone. Output only the translation.",tweetText(tweet),.2);if(!result){closeMenu();return}let box=tweet.querySelector(".ccp-translate");if(!box){box=document.createElement("div");box.className="ccp-translate";tweet.querySelector('[data-testid="tweetText"]')?.parentElement?.appendChild(box);}box.textContent=result;closeMenu();}
+  async function rewrite(menu,tweet){menu.innerHTML=loading("Rewriting");const result=await ai("Rewrite this post for Crypto Twitter. Make it sharper, clearer and more engaging while preserving meaning. Output only the rewritten text.",tweetText(tweet),.75);if(result)showResult(menu,"Rewrite",result,tweet);else closeMenu();}
+  async function thread(menu,tweet){menu.innerHTML=loading("Building thread");const result=await ai("Turn this idea into exactly 3 concise crypto Twitter posts. Number them 1/3, 2/3 and 3/3. Output only the thread.",tweetText(tweet),.75);if(result)showResult(menu,"Thread",result,tweet);else closeMenu();}
+
+  async function showResult(menu,title,text,tweet){menu.innerHTML=`<div class="ccp-head"><div class="ccp-brand"><span class="ccp-logo">✦</span><span>${esc(title)}</span></div><div class="ccp-sub">Generated by Crypto Copilot</div></div><div class="ccp-result">${esc(text)}<div class="ccp-actions"><button class="ccp-mini" id="copy">Copy</button><button class="ccp-mini" id="insert">Insert</button></div></div>`;menu.querySelector("#copy").onclick=()=>navigator.clipboard?.writeText(text);menu.querySelector("#insert").onclick=async()=>{if(!replyBtn(tweet)?.click?.()){newPostBtn()?.click();}await sleep(500);await insertText(text);closeMenu();};}
+
+  async function smartQuote(menu,tweet){menu.innerHTML=loading("Creating quote");const result=await ai("Write ONE short, natural quote-tweet comment about this post. Add an original opinion. Under 25 words. No hashtags. Output only the comment.",tweetText(tweet),.82);if(!result){closeMenu();return}closeMenu();await openQuote(tweet,result);}
+  async function openQuote(tweet,comment){const rt=tweet?.querySelector('[data-testid="retweet"]');if(!rt)return false;rt.click();await sleep(350);const nodes=[...document.querySelectorAll('[role="menuitem"],[role="menuitemradio"],[data-testid]')];const q=nodes.find(x=>/quote/i.test((x.innerText||x.getAttribute("aria-label")||"")));if(!q)return false;q.click();await sleep(650);return insertText(comment);}
+
+  function extractTrends(){const arr=[],seen=new Set();document.querySelectorAll('a[href*="/search?q="]').forEach(a=>{const t=(a.innerText||a.textContent||"").trim().replace(/\s+/g," ");if(t&&t.length>2&&t.length<90&&!/^(search|advanced search)$/i.test(t)&&!seen.has(t)){seen.add(t);arr.push(t);}});return arr.slice(0,8);}
+  async function trends(menu){const list=extractTrends();menu.innerHTML=`<div class="ccp-head"><div class="ccp-brand"><span class="ccp-logo">📈</span><span>Trend Radar</span></div><div class="ccp-sub">Trends visible in your current X session</div></div><div class="ccp-trends"></div>`;const box=menu.querySelector(".ccp-trends");if(!list.length){box.innerHTML='<div class="ccp-loading">Open X Explore → Trending, then open Copilot again.</div>';return;}list.forEach(trend=>{const el=document.createElement("div");el.className="ccp-trend";el.innerHTML=`<b>${esc(trend)}</b><small>Generate a post around this trend</small>`;el.onclick=async()=>{el.innerHTML="<small>Generating…</small>";const result=await ai(`Write one natural crypto Twitter post around the trend "${trend}". Do not invent facts. Keep it concise and engaging. Output only the post.`);if(result){newPostBtn()?.click();await sleep(600);await insertText(result);closeMenu();}};box.appendChild(el);});}
+
+  function buildMenu(tweet,anchor){closeMenu();const menu=document.createElement("div");menu.className="ccp-menu";const text=tweetText(tweet),preview=text.length>125?text.slice(0,125)+"…":text;menu.innerHTML=`<div class="ccp-head"><div class="ccp-brand"><span class="ccp-logo">✦</span><span>Crypto Copilot</span></div><div class="ccp-sub">AI tools for Crypto Twitter</div></div>${preview?`<div class="ccp-context">${esc(preview)}</div>`:""}<div class="ccp-section">AI Actions</div><div class="ccp-body"></div>`;const body=menu.querySelector(".ccp-body");
+    body.appendChild(item("⚡","Smart Reply","Short · Smart · Professional",()=>{menu.innerHTML='<div class="ccp-head"><div class="ccp-brand"><span class="ccp-logo">⚡</span><span>Smart Reply</span></div><div class="ccp-sub">Choose your reply style</div></div><div class="ccp-body"></div>';const b=menu.querySelector(".ccp-body");b.appendChild(item("◉","Short","Fast and punchy",()=>smartReply(menu,tweet,"short")));b.appendChild(item("✦","Smart","Fresh opinion",()=>smartReply(menu,tweet,"smart")));b.appendChild(item("◆","Professional","Credible and informed",()=>smartReply(menu,tweet,"professional")));position(menu,anchor);}));
+    body.appendChild(item("🔁","Smart Quote","AI comment + Quote Tweet",()=>smartQuote(menu,tweet)));
+    body.appendChild(item("📈","Trend Radar","Use visible X trends",()=>trends(menu)));
+    body.appendChild(item("🌍","Translate","Natural Persian translation",()=>translate(menu,tweet)));
+    body.appendChild(item("✎","Rewrite","Sharper and clearer",()=>rewrite(menu,tweet)));
+    body.appendChild(item("🧵","Thread","Turn this into 3 posts",()=>thread(menu,tweet)));
+    const d=document.createElement("div");d.className="ccp-divider";body.appendChild(d);
+    body.appendChild(item("🚀","Project Tweet","Create a new crypto post",async()=>{const project=prompt("Project name:");if(!project)return;menu.innerHTML=loading("Creating post");const result=await ai(`Write one punchy crypto Twitter post about ${project}. 1-3 sentences, natural insider tone, no hashtags. Do not invent current facts. Output only the post.`);if(result){newPostBtn()?.click();await sleep(600);await insertText(result);}closeMenu();}));
+    document.body.appendChild(menu);activeMenu=menu;position(menu,anchor);
+  }
+
+  function attach(tweet){if(!tweet||tweet.querySelector(".ccp-fab"))return;const group=tweet.querySelector('[role="group"]');if(!group)return;const b=document.createElement("button");b.className="ccp-fab";b.type="button";b.textContent="✦";b.title="Crypto Copilot";b.setAttribute("aria-label","Crypto Copilot");b.onclick=e=>{e.preventDefault();e.stopPropagation();buildMenu(tweet,b);};group.appendChild(b);}
+  function scan(){document.querySelectorAll("article").forEach(attach);}
+  scan();new MutationObserver(scan).observe(document.body,{childList:true,subtree:true});document.addEventListener("click",e=>{if(activeMenu&&!activeMenu.contains(e.target)&&!e.target.closest(".ccp-fab"))closeMenu();});window.addEventListener("scroll",closeMenu,true);console.log("✅ Crypto Copilot V2.0.2 active");
+})();
