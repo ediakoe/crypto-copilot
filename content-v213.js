@@ -63,26 +63,65 @@
   async function openNewPost(){const b=document.querySelector('[data-testid="SideNav_NewTweet_Button"]');if(!b)return null;b.click();return waitFor(anyEditor,8000);}
 
   function normalize(s){return String(s||'').replace(/\s+/g,' ').trim();}
+
+  function words(s){
+    return normalize(s).toLowerCase().match(/[\p{L}\p{N}_$@#]+/gu) || [];
+  }
+
+  function overlapRatio(source,reply){
+    const src=words(source).filter(w=>w.length>2);
+    const out=words(reply).filter(w=>w.length>2);
+    if(!src.length||!out.length)return 0;
+    const set=new Set(src);
+    const shared=out.filter(w=>set.has(w));
+    return shared.length/Math.max(1,out.length);
+  }
+
+  function hasRepeatedPhrase(text){
+    const n=normalize(text);
+    const parts=n.split(/[.!?]+/).map(x=>x.trim()).filter(Boolean);
+    if(parts.length>=2){
+      for(let i=0;i<parts.length;i++){
+        for(let j=i+1;j<parts.length;j++){
+          const a=parts[i].toLowerCase(), b=parts[j].toLowerCase();
+          if(a.length>18 && a===b)return true;
+        }
+      }
+    }
+    const tokens=n.split(' ');
+    if(tokens.length>=10 && tokens.length%2===0){
+      const h=tokens.length/2;
+      if(tokens.slice(0,h).join(' ').toLowerCase()===tokens.slice(h).join(' ').toLowerCase())return true;
+    }
+    return false;
+  }
+
   function cleanGenerated(text,source){
     let out=normalize(text).replace(/^[\'\"“”]+|[\'\"“”]+$/g,'').trim();
-    if(!out)return out;
-    const words=out.split(' ');
-    if(words.length>=8 && words.length%2===0){const half=words.length/2;if(words.slice(0,half).join(' ').toLowerCase()===words.slice(half).join(' ').toLowerCase())out=words.slice(0,half).join(' ');}
+    if(!out)return '';
+    out=out.replace(/^reply\s*:\s*/i,'').trim();
+    out=out.replace(/^\d+\s*\/\s*\d+\s*/,'').trim();
+    if(!out)return '';
+    if(hasRepeatedPhrase(out))return '';
     if(normalize(source).toLowerCase()===out.toLowerCase())return '';
+    if(overlapRatio(source,out)>0.72)return '';
     return out;
   }
 
-  // One insertion attempt only. No synthetic input event after successful insertion.
+  // Replace the composer content in exactly one operation. Never append and never dispatch a second synthetic input after success.
   function putText(editor,text){
     if(!editor || editor.dataset.ccp213Inserted==='1')return false;
     editor.dataset.ccp213Inserted='1';
     editor.focus();
-    const range=document.createRange();range.selectNodeContents(editor);range.collapse(false);
-    const sel=getSelection();sel.removeAllRanges();sel.addRange(range);
-    try{return document.execCommand('insertText',false,text)}catch{return false}
+    try{
+      document.execCommand('selectAll',false,null);
+      const ok=document.execCommand('insertText',false,text);
+      editor.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:text}));
+      return ok===true;
+    }catch{return false}
   }
 
-  const replyPrompt=(style,text)=>`Write ONE original reply to this exact Tweet. Style: ${style}. React to the idea, don't restate the Tweet. Do not copy more than a few words from it. Sound like a real person on X. Maximum 25 words. Use 0-2 emojis if they genuinely fit. No hashtags. No quotes. Output only the reply.\n\nTweet:\n${text}`;
+  const replyPrompt=(style,text)=>`Write ONE original reply to this exact Tweet. Style: ${style}. React to the idea, not the wording. Do NOT restate, paraphrase, quote, or summarize the Tweet. Avoid reusing distinctive words or phrases from it. Add a fresh human reaction, opinion, question, or observation. Sound like a real person on X. Maximum 25 words. Use 0-2 emojis if they genuinely fit. No hashtags. No quotes. Output only the reply.\n\nTWEET_TO_REACT_TO:\n${text}\n\nIMPORTANT: The output must be NEW text, not a rewrite of the Tweet.`;
 
   async function smartReply(tweet,style){
     if(busy)return; busy=true;
@@ -92,23 +131,26 @@
     if(!r.ok){setStatus('❌ '+r.error,'err');busy=false;return}
     let reply=cleanGenerated(r.text,source);
     if(!reply){
-      r=await askAI(replyPrompt(style,source)+'\nIMPORTANT: Do not repeat any sentence or phrase from the Tweet.');
+      r=await askAI(replyPrompt(style,source)+'\nGenerate a clearly different reaction with different vocabulary and sentence structure.');
       if(!r.ok){setStatus('❌ '+r.error,'err');busy=false;return}
       reply=cleanGenerated(r.text,source);
     }
-    if(!reply){setStatus('❌ AI returned a repeated Tweet instead of a reply','err');busy=false;return}
+    if(!reply){setStatus('❌ AI returned text too similar to the Tweet','err');busy=false;return}
     loading('Opening this Tweet reply box…');
     const editor=await openReplyComposer(tweet);
     if(!editor){setStatus('❌ Could not open the reply box for this Tweet','err');busy=false;return}
+    editor.dataset.ccp213Inserted='';
     if(!putText(editor,reply)){setStatus('❌ X did not accept the generated reply','err');busy=false;return}
-    setStatus('✓ Reply inserted once','ok');await sleep(500);close();
+    setStatus('✓ Reply inserted once','ok');
+    await sleep(700);
+    close();
   }
 
   async function translate(tweet){if(busy)return;busy=true;const text=tweetText(tweet);if(!text){setStatus('❌ Tweet text not found','err');busy=false;return}loading('Translating…');const r=await askAI(`Translate into natural Persian. Keep names, tickers and crypto terms unchanged. Preserve tone. Output only the translation.\n\n${text}`,'You are a professional Persian translator for Crypto Twitter. Output only the translation.');if(!r.ok){setStatus('❌ '+r.error,'err');busy=false;return}let box=tweet.querySelector('.ccp213-translation');if(!box){box=document.createElement('div');box.className='ccp213-translation';tweet.appendChild(box)}box.textContent=r.text;close();}
 
   async function rewrite(tweet){if(busy)return;busy=true;const text=tweetText(tweet);loading('Rewriting…');const r=await askAI(`Rewrite this post so it sounds sharper, clearer and genuinely human while preserving its meaning. Use natural punctuation and 0-2 emojis if appropriate. Output only the rewritten post.\n\n${text}`);if(!r.ok){setStatus('❌ '+r.error,'err');busy=false;return}close();const e=await openNewPost();if(e)putText(e,r.text);busy=false;}
   async function thread(tweet){if(busy)return;busy=true;const text=tweetText(tweet);loading('Building thread…');const r=await askAI(`Turn this idea into exactly 3 connected Crypto Twitter posts. Each post should be natural and non-repetitive. Number them 1/3, 2/3, 3/3. Use emojis sparingly. Output only the 3 posts separated by a blank line.\n\n${text}`);if(!r.ok){setStatus('❌ '+r.error,'err');busy=false;return}close();const e=await openNewPost();if(e)putText(e,r.text);busy=false;}
-  async function quote(tweet){if(busy)return;busy=true;const text=tweetText(tweet);loading('Writing quote comment…');const r=await askAI(`Write ONE natural quote-tweet comment reacting to this exact post. Add a genuine opinion or observation. Maximum 25 words. Use 0-2 fitting emojis. No hashtags. Output only the comment.\n\n${text}`);if(!r.ok){setStatus('❌ '+r.error,'err');busy=false;return}const rb=retweetButton(tweet);if(!rb){setStatus('❌ Quote button not found','err');busy=false;return}rb.click();const menu=await waitFor(()=>[...document.querySelectorAll('[role="menuitem"]')].find(x=>/Quote/i.test(x.innerText||'')),4000);if(!menu){setStatus('❌ Quote option not found','err');busy=false;return}menu.click();const e=await waitFor(dialogEditor,8000);if(!e||!putText(e,r.text)){setStatus('❌ Quote composer not found','err');busy=false;return}setStatus('✓ Quote inserted once','ok');await sleep(500);close();}
+  async function quote(tweet){if(busy)return;busy=true;const text=tweetText(tweet);loading('Writing quote comment…');const r=await askAI(`Write ONE natural quote-tweet comment reacting to this exact post. Add a genuine opinion or observation. Do not repeat or paraphrase the post. Maximum 25 words. Use 0-2 fitting emojis. No hashtags. Output only the comment.\n\n${text}`);if(!r.ok){setStatus('❌ '+r.error,'err');busy=false;return}const rb=retweetButton(tweet);if(!rb){setStatus('❌ Quote button not found','err');busy=false;return}rb.click();const menu=await waitFor(()=>[...document.querySelectorAll('[role="menuitem"]')].find(x=>/Quote/i.test(x.innerText||'')),4000);if(!menu){setStatus('❌ Quote option not found','err');busy=false;return}menu.click();const e=await waitFor(dialogEditor,8000);if(!e||!putText(e,r.text)){setStatus('❌ Quote composer not found','err');busy=false;return}setStatus('✓ Quote inserted once','ok');await sleep(500);close();}
   async function trends(){if(busy)return;const links=[...document.querySelectorAll('a[href*="/search?q="]')].map(a=>(a.innerText||'').trim()).filter(Boolean).slice(0,8);if(!links.length){setStatus('Open Explore → Trending on X first','err');return}const body=panel.querySelector('.ccp213-body');body.innerHTML=links.map((x,i)=>`<button class="ccp213-back trend213" data-i="${i}">📈 ${esc(x)}</button>`).join('');panel.querySelectorAll('.trend213').forEach((b,i)=>b.onclick=async()=>{if(busy)return;busy=true;loading('Writing trend post…');const r=await askAI(`Write one concise, natural Crypto Twitter post around this visible X trend: ${links[i]}. Do not invent facts. Use 0-2 emojis only if natural. Output only the post.`);if(!r.ok){setStatus('❌ '+r.error,'err');busy=false;return}close();const e=await openNewPost();if(e)putText(e,r.text);busy=false});position();}
 
   function smartReplyUI(tweet){panel.innerHTML=`<div class="ccp213-head"><div class="ccp213-brand"><div class="ccp213-logo">⚡</div><div><div class="ccp213-title">Smart Reply</div><div class="ccp213-sub">Generate once → insert directly into THIS Tweet</div></div></div></div><div class="ccp213-body"><div class="ccp213-grid" id="styles"></div><button class="ccp213-generate" id="gen">✨ Generate Reply</button><button class="ccp213-back" id="back">← Back</button></div>`;let selected='smart',g=panel.querySelector('#styles');[['◉','Short','Casual & punchy','short'],['✦','Smart','Natural & insightful','smart'],['◆','Professional','Clean & credible','professional']].forEach(([i,t,d,k])=>{const b=button(i,t,d,()=>{selected=k;g.querySelectorAll('button').forEach(x=>x.classList.remove('ccp213-selected'));b.classList.add('ccp213-selected')});if(k==='smart')b.classList.add('ccp213-selected');g.appendChild(b)});panel.querySelector('#gen').onclick=()=>smartReply(tweet,selected);panel.querySelector('#back').onclick=()=>openPanel(tweet,currentFab);position();}
