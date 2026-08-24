@@ -1,12 +1,12 @@
 {
   "manifest_version": 3,
   "name": "Crypto Copilot",
-  "version": "2.1.2",
+  "version": "2.1.3",
   "description": "Premium AI copilot for natural crypto replies and content creation on X",
   "permissions": ["storage"],
   "host_permissions": ["https://x.com/*", "https://twitter.com/*", "https://openrouter.ai/*"],
   "background": {"service_worker": "background.js"},
   "action": {"default_title": "Crypto Copilot — API Setup", "default_popup": "popup.html"},
   "options_ui": {"page": "popup.html", "open_in_tab": true},
-  "content_scripts": [{"matches": ["https://x.com/*", "https://twitter.com/*"], "js": ["content-v212.js"], "run_at": "document_idle"}]
+  "content_scripts": [{"matches": ["https://x.com/*", "https://twitter.com/*"], "js": ["content-v213.js"], "run_at": "document_idle"}]
 }
