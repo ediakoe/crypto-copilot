@@ -1,1 +1,28 @@
-{"manifest_version":3,"name":"Crypto Copilot","version":"2.3.0","description":"Premium AI copilot for natural crypto replies and content creation on X","permissions":[],"host_permissions":["https://x.com/*","https://twitter.com/*","https://crypto-copilot-api.vercel.app/*"],"background":{"service_worker":"background.js"},"action":{"default_title":"Crypto Copilot"},"content_scripts":[{"matches":["https://x.com/*","https://twitter.com/*"],"js":["content-v217.js"],"run_at":"document_idle"}]}
+{
+  "manifest_version": 3,
+  "name": "Crypto Copilot",
+  "version": "2.3.1",
+  "description": "Premium AI copilot for natural crypto replies and content creation on X",
+  "permissions": [],
+  "host_permissions": [
+    "https://x.com/*",
+    "https://twitter.com/*",
+    "https://crypto-copilot-api.diako1.workers.dev/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Crypto Copilot"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://x.com/*",
+        "https://twitter.com/*"
+      ],
+      "js": ["content-v217.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
