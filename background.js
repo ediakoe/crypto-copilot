@@ -1,4 +1,4 @@
-const CENTRAL_AI_URL = "https://crypto-copilot-api.vercel.app/api/chat";
+const CENTRAL_AI_URL = "https://crypto-copilot-api.diako1.workers.dev/";
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type !== "CCP_AI") return;
