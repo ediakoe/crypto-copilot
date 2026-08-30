@@ -1,22 +1,13 @@
+const CENTRAL_AI_URL = "https://crypto-copilot-api.vercel.app/api/chat";
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type !== "CCP_AI") return;
 
   (async () => {
     try {
-      const { openrouter_api_key: apiKey } = await chrome.storage.local.get("openrouter_api_key");
-      if (!apiKey) {
-        sendResponse({ ok: false, error: "API_NOT_CONFIGURED" });
-        return;
-      }
-
-      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      const response = await fetch(CENTRAL_AI_URL, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-          "HTTP-Referer": "https://x.com",
-          "X-Title": "Crypto Copilot V2 Premium"
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           model: message.model || "openrouter/auto",
           temperature: message.temperature ?? 0.8,
@@ -25,18 +16,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
 
       const data = await response.json().catch(() => ({}));
+
       if (!response.ok || data?.error) {
         sendResponse({
           ok: false,
-          error: data?.error?.message || `OpenRouter error (${response.status})`
+          error: data?.error || `Crypto Copilot backend error (${response.status})`
         });
         return;
       }
 
-      sendResponse({ ok: true, text: data?.choices?.[0]?.message?.content?.trim() || "" });
+      sendResponse({
+        ok: true,
+        text: String(data?.text || "").trim()
+      });
     } catch (error) {
-      console.error("Crypto Copilot AI request failed", error);
-      sendResponse({ ok: false, error: error?.message || "AI request failed" });
+      console.error("Crypto Copilot central AI request failed", error);
+      sendResponse({ ok: false, error: error?.message || "Central AI request failed" });
     }
   })();
 
