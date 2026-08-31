@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Crypto Copilot",
-  "version": "2.3.1",
+  "version": "2.2.3",
   "description": "Premium AI copilot for natural crypto replies and content creation on X",
   "permissions": [],
   "host_permissions": [
@@ -21,7 +21,7 @@
         "https://x.com/*",
         "https://twitter.com/*"
       ],
-      "js": ["content-v217.js"],
+      "js": ["content-v223.js"],
       "run_at": "document_idle"
     }
   ]
