@@ -1,0 +1,1 @@
+Crypto Copilot 2.2.4 extension package marker.
