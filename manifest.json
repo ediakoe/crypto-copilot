@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Crypto Copilot Central AI",
-  "version": "4.0.2",
+  "version": "4.0.6",
   "description": "Premium AI copilot for X powered by a centralized Cloudflare Worker",
   "permissions": [],
   "host_permissions": [
@@ -23,9 +23,25 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://x.com/*", "https://twitter.com/*"],
-      "js": ["content-final.js"],
+      "matches": [
+        "https://x.com/*",
+        "https://twitter.com/*"
+      ],
+      "js": [
+        "content-final.js"
+      ],
       "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "tweet-icon.png"
+      ],
+      "matches": [
+        "https://x.com/*",
+        "https://twitter.com/*"
+      ]
     }
   ]
 }
