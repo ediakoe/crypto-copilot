@@ -1,25 +1,9 @@
-# Crypto Copilot 🚀
+# Crypto Copilot
 
-AI Copilot for X (Twitter)
+## Verified 2.2.4 release
 
-## Features
+Use the verified ZIP package below for installation:
 
-🤖 AI Reply
+`Crypto-Copilot-2.2.4-verified.zip`
 
-🌍 Persian Translation
-
-🧵 Thread Generator
-
-✍️ Custom Twee
-
-## Installation
-
-1. Download ZIP
-2. Open Chrome Extensions
-3. Enable Developer Mode
-4. Click Load Unpacked
-5. Select the extension folder
-
-## Powered By
-
-OpenRouter AI
+Download it, extract the ZIP, then load the extracted `Crypto-Copilot-2.2.4` folder as an unpacked extension in your browser.
