@@ -200,26 +200,51 @@
     busy=true;
     const source=tweetText(tweet);
     if(!source){setStatus("❌ Tweet text not found","err");busy=false;return;}
-    loading("Finding the best reply opportunity…");
-    const system="Evaluate a crypto Tweet for reply opportunity. Return exactly: LEVEL|STYLE|REASON. LEVEL=HIGH, MEDIUM, or LOW. STYLE=ANALYTICAL, MEME, or CONTROVERSIAL. REASON=one short sentence under 12 words. No JSON, no markdown.";
+    loading("Analyzing opportunity + creating replies…");
+    const system="Analyze this crypto Tweet and return EXACTLY 5 lines, no markdown: line1 LEVEL=HIGH or MEDIUM or LOW; line2 STYLE=ANALYTICAL or MEME or CONTROVERSIAL; line3 REASON=under 12 words; line4 ANALYTICAL=one reply under 25 words with exactly one emoji; line5 MEME=one reply under 25 words with exactly one emoji; then line6 CONTROVERSIAL=one reply under 25 words with exactly one emoji. Replies must be natural, fresh, non-repetitive, and must not echo or paraphrase the Tweet. No hashtags.";
     const user="Tweet:\n"+source;
-    const r=await askAI([{role:"system",content:system},{role:"user",content:user}],.45);
+    const r=await askAI([{role:"system",content:system},{role:"user",content:user}],.55);
     if(!r.ok){setStatus("❌ "+r.error,"err");busy=false;return;}
-    const parts=String(r.text||"").replace(/[`"]/g,"").trim().split("|").map(x=>x.trim());
+    const lines=String(r.text||"").replace(/```/g,"").split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+    const getVal=(prefix)=>{const line=lines.find(x=>x.toUpperCase().startsWith(prefix));return line?line.slice(prefix.length).replace(/^\s*[:=]\s*/,"").trim():"";};
     const levelMap={HIGH:"High Opportunity",MEDIUM:"Medium Opportunity",LOW:"Low Opportunity"};
     const styleMap={ANALYTICAL:"Analytical",MEME:"Meme",CONTROVERSIAL:"Controversial"};
-    const level=levelMap[String(parts[0]||"").toUpperCase()];
-    const style=styleMap[String(parts[1]||"").toUpperCase()];
-    const reason=String(parts.slice(2).join(" | ")||"").trim();
-    if(!level||!style||!reason){setStatus("❌ Opportunity analysis failed","err");busy=false;return;}
+    const level=levelMap[String(getVal("LEVEL")).toUpperCase()];
+    const style=styleMap[String(getVal("STYLE")).toUpperCase()];
+    const reason=getVal("REASON");
+    const ideas={analytical:getVal("ANALYTICAL"),meme:getVal("MEME"),controversial:getVal("CONTROVERSIAL")};
+    if(!level||!style||!reason||!ideas.analytical||!ideas.meme||!ideas.controversial){setStatus("❌ Opportunity response was incomplete","err");busy=false;return;}
     const body=panel?.querySelector(".ccp406-body");
     if(!body){busy=false;return;}
     const levelIcon=level==="High Opportunity"?"🔥":level==="Medium Opportunity"?"🟡":"⚪";
     const styleIcon=style==="Analytical"?"🧠":style==="Meme"?"😂":"🔥";
-    body.innerHTML='<div style="padding:4px 3px 8px;color:#727d90;font-size:9px;font-weight:800;letter-spacing:.13em">⚡ OPPORTUNITY</div><div style="font-size:21px;font-weight:900;margin-top:7px">'+esc(levelIcon+" "+level)+'</div><div style="margin-top:12px;color:#8d99ab;font-size:9px;font-weight:800;letter-spacing:.1em">BEST REPLY STYLE</div><div style="font-size:15px;font-weight:850;margin-top:4px">'+esc(styleIcon+" "+style)+'</div><div style="margin-top:10px;color:#b9c3d1;font-size:11px;line-height:1.55">'+esc(reason)+'</div></div><button type="button" class="ccp406-generate" id="opp-ideas">✨ Show 3 Reply Ideas</button><button type="button" class="ccp406-back" id="opp-back">← Back</button>';
-    body.querySelector("#opp-ideas").onclick=()=>{busy=false;replyIdeas(tweet);};
-    body.querySelector("#opp-back").onclick=()=>{busy=false;openPanel(tweet,currentFab);};
-    setStatus("✓ Opportunity found","ok");
+    const rows=[["🧠","Analytical",ideas.analytical],["😂","Meme",ideas.meme],["🔥","Controversial",ideas.controversial]];
+    body.innerHTML='<div class="ccp406-opportunity" style="padding:4px 3px 10px"><div style="font-size:10px;font-weight:850;letter-spacing:.11em;color:#727d90">⚡ OPPORTUNITY</div><div style="font-size:21px;font-weight:900;margin-top:7px">'+esc(levelIcon+" "+level)+'</div><div style="margin-top:12px;color:#8d99ab;font-size:9px;font-weight:800;letter-spacing:.1em">BEST REPLY STYLE</div><div style="font-size:15px;font-weight:850;margin-top:4px">'+esc(styleIcon+" "+style)+'</div><div style="margin-top:10px;color:#b9c3d1;font-size:11px;line-height:1.55">'+esc(reason)+'</div></div><div style="padding:4px 3px 8px;color:#727d90;font-size:9px;font-weight:800;letter-spacing:.13em">CHOOSE YOUR REPLY</div><div class="ccp406-ideas"></div><button type="button" class="ccp406-back" id="opp-back">← Back</button>';
+    const wrap=body.querySelector(".ccp406-ideas");
+    rows.forEach(function(row){
+      const icon=row[0],title=row[1],rawText=row[2],clean=cleanReply(rawText,source);
+      const b=document.createElement("button");
+      b.type="button";b.className="ccp406-idea";
+      b.innerHTML='<div class="ccp406-idea-head"><span class="ccp406-idea-title">'+esc(icon+" "+title)+'</span><span class="ccp406-idea-hint">CLICK TO INSERT</span></div><div class="ccp406-idea-copy">'+esc(clean||rawText)+'</div>';
+      b.onclick=async function(ev){
+        ev.preventDefault();ev.stopPropagation();
+        if(busy)return;
+        const reply=cleanReply(rawText,source);
+        if(!reply){setStatus("❌ This suggestion was rejected","err");return;}
+        busy=true;
+        loading("Opening THIS Tweet reply box…");
+        const editor=await openReplyComposer(tweet);
+        if(!editor){setStatus("❌ Reply composer for this Tweet was not found","err");busy=false;return;}
+        const result=await insertIntoComposer(editor,reply);
+        if(!result.ok){setStatus("❌ "+result.error,"err");busy=false;return;}
+        setStatus("✓ Reply inserted","ok");
+        await sleep(500);
+        close();
+      };
+      wrap.appendChild(b);
+    });
+    body.querySelector("#opp-back").onclick=function(){busy=false;openPanel(tweet,currentFab);};
+    setStatus("✓ Opportunity + 3 reply ideas ready","ok");
     busy=false;
     position();
   }
