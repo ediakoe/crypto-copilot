@@ -201,23 +201,22 @@
     const source=tweetText(tweet);
     if(!source){setStatus("❌ Tweet text not found","err");busy=false;return;}
     loading("Finding the best reply opportunity…");
-    const system="You are an X engagement assistant for crypto Twitter. Return ONLY valid JSON with keys level, style, reason. level must be exactly one of High Opportunity, Medium Opportunity, Low Opportunity. style must be exactly one of Analytical, Meme, Controversial. reason must be one short natural sentence under 18 words. Judge only the content and conversation potential of the source Tweet. Do not claim certainty or invent metrics.";
-    const user="Evaluate whether this Tweet is a good opportunity for a reply right now. Choose the best reply style from Analytical, Meme, or Controversial.\n\nSOURCE:\n"+source;
-    const r=await askAI([{role:"system",content:system},{role:"user",content:user}],.72);
+    const system="Evaluate a crypto Tweet for reply opportunity. Return exactly: LEVEL|STYLE|REASON. LEVEL=HIGH, MEDIUM, or LOW. STYLE=ANALYTICAL, MEME, or CONTROVERSIAL. REASON=one short sentence under 12 words. No JSON, no markdown.";
+    const user="Tweet:\n"+source;
+    const r=await askAI([{role:"system",content:system},{role:"user",content:user}],.45);
     if(!r.ok){setStatus("❌ "+r.error,"err");busy=false;return;}
-    let data=null;
-    try{
-      const raw=String(r.text||"").replace(/^```json\s*/i,"").replace(/\s*```$/,"").trim();
-      data=JSON.parse(raw);
-    }catch{}
-    const levels=new Set(["High Opportunity","Medium Opportunity","Low Opportunity"]);
-    const styles=new Set(["Analytical","Meme","Controversial"]);
-    if(!data||!levels.has(data.level)||!styles.has(data.style)){setStatus("❌ Opportunity analysis failed","err");busy=false;return;}
+    const parts=String(r.text||"").replace(/[`"]/g,"").trim().split("|").map(x=>x.trim());
+    const levelMap={HIGH:"High Opportunity",MEDIUM:"Medium Opportunity",LOW:"Low Opportunity"};
+    const styleMap={ANALYTICAL:"Analytical",MEME:"Meme",CONTROVERSIAL:"Controversial"};
+    const level=levelMap[String(parts[0]||"").toUpperCase()];
+    const style=styleMap[String(parts[1]||"").toUpperCase()];
+    const reason=String(parts.slice(2).join(" | ")||"").trim();
+    if(!level||!style||!reason){setStatus("❌ Opportunity analysis failed","err");busy=false;return;}
     const body=panel?.querySelector(".ccp406-body");
     if(!body){busy=false;return;}
-    const levelIcon=data.level==="High Opportunity"?"🔥":data.level==="Medium Opportunity"?"🟡":"⚪";
-    const styleIcon=data.style==="Analytical"?"🧠":data.style==="Meme"?"😂":"🔥";
-    body.innerHTML='<div class="ccp406-opportunity"><div style="font-size:10px;font-weight:850;letter-spacing:.11em;color:#727d90">⚡ OPPORTUNITY</div><div style="font-size:21px;font-weight:900;margin-top:7px">'+esc(levelIcon+" "+data.level)+'</div><div style="margin-top:12px;color:#8d99ab;font-size:9px;font-weight:800;letter-spacing:.1em">BEST REPLY STYLE</div><div style="font-size:15px;font-weight:850;margin-top:4px">'+esc(styleIcon+" "+data.style)+'</div><div style="margin-top:10px;color:#b9c3d1;font-size:11px;line-height:1.55">'+esc(data.reason)+'</div></div><button type="button" class="ccp406-generate" id="opp-ideas">✨ Show 3 Reply Ideas</button><button type="button" class="ccp406-back" id="opp-back">← Back</button>';
+    const levelIcon=level==="High Opportunity"?"🔥":level==="Medium Opportunity"?"🟡":"⚪";
+    const styleIcon=style==="Analytical"?"🧠":style==="Meme"?"😂":"🔥";
+    body.innerHTML='<div style="padding:4px 3px 8px;color:#727d90;font-size:9px;font-weight:800;letter-spacing:.13em">⚡ OPPORTUNITY</div><div style="font-size:21px;font-weight:900;margin-top:7px">'+esc(levelIcon+" "+level)+'</div><div style="margin-top:12px;color:#8d99ab;font-size:9px;font-weight:800;letter-spacing:.1em">BEST REPLY STYLE</div><div style="font-size:15px;font-weight:850;margin-top:4px">'+esc(styleIcon+" "+style)+'</div><div style="margin-top:10px;color:#b9c3d1;font-size:11px;line-height:1.55">'+esc(reason)+'</div></div><button type="button" class="ccp406-generate" id="opp-ideas">✨ Show 3 Reply Ideas</button><button type="button" class="ccp406-back" id="opp-back">← Back</button>';
     body.querySelector("#opp-ideas").onclick=()=>{busy=false;replyIdeas(tweet);};
     body.querySelector("#opp-back").onclick=()=>{busy=false;openPanel(tweet,currentFab);};
     setStatus("✓ Opportunity found","ok");
