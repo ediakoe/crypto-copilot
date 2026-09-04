@@ -147,24 +147,45 @@
   async function insertReplyText(editor,text){
     if(!editor||!isVisible(editor)||!editor.isContentEditable)return {ok:false,error:'Reply editor is not editable'};
     if(editorText(editor))return {ok:false,error:'Reply composer is not empty'};
-    const expected=normalizeText(text);editor.focus();
-    try{const sel=window.getSelection(),range=document.createRange();range.selectNodeContents(editor);range.collapse(true);sel.removeAllRanges();sel.addRange(range);}catch{}
-    let ok=false;
-    try{ok=document.execCommand('insertText',false,text)===true}catch{}
-    await sleep(350);
-    if(editorText(editor)===expected){editor.focus();return {ok:true,actualText:expected};}
+    editor.focus();
+    // Exactly one active insertion path: never execute another insertion
+    // method after X has accepted any text.
     try{
-      editor.focus();const sel=window.getSelection(),range=sel.rangeCount?sel.getRangeAt(0):document.createRange();
-      if(!sel.rangeCount){range.selectNodeContents(editor);range.collapse(false)}
-      const before=new InputEvent('beforeinput',{bubbles:true,cancelable:true,inputType:'insertText',data:text});
-      if(document.execCommand('insertText',false,text)===true)ok=true; else if(editor.dispatchEvent(before)){
-        const node=document.createTextNode(text);range.insertNode(node);range.setStartAfter(node);range.collapse(true);sel.removeAllRanges();sel.addRange(range);editor.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:text}));ok=true;
-      }
+      const sel=window.getSelection();
+      const range=document.createRange();
+      range.selectNodeContents(editor);
+      range.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(range);
+      const dt=new DataTransfer();
+      dt.setData('text/plain',text);
+      editor.dispatchEvent(new ClipboardEvent('paste',{bubbles:true,cancelable:true,clipboardData:dt}));
     }catch{}
-    await sleep(400);const actual=editorText(editor);if(actual===expected){editor.focus();return {ok:true,actualText:actual};}
-    return {ok:false,error:`X did not accept the reply. Composer contains: ${actual||'(empty)'}`};
+    await sleep(450);
+    let actual=editorText(editor);
+    if(actual){
+      editor.focus();
+      return {ok:true,actualText:actual};
+    }
+    // Paste inserted nothing, so one native fallback is safe.
+    try{
+      editor.focus();
+      const sel=window.getSelection();
+      const range=document.createRange();
+      range.selectNodeContents(editor);
+      range.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(range);
+      document.execCommand('insertText',false,text);
+    }catch{}
+    await sleep(450);
+    actual=editorText(editor);
+    if(actual){
+      editor.focus();
+      return {ok:true,actualText:actual};
+    }
+    return {ok:false,error:'X did not accept the reply. Composer is still empty'};
   }
-
   function close(){panel?.remove();panel=null;currentTweet=null;currentFab=null;busy=false;}
   function position(){if(!panel||!currentFab)return;const r=currentFab.getBoundingClientRect(),w=Math.min(370,innerWidth-20),h=panel.offsetHeight||420;let top=r.bottom+8;if(top+h>innerHeight-10)top=r.top-h-8;panel.style.left=Math.max(10,Math.min(r.left,innerWidth-w-10))+'px';panel.style.top=Math.max(10,Math.min(top,innerHeight-h-10))+'px';}
   function setStatus(msg,type=''){const el=panel?.querySelector('.ccp406-status');if(el){el.textContent=msg;el.className='ccp406-status '+type;position();}}
