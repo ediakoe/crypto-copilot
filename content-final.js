@@ -258,10 +258,15 @@
         loading("Opening THIS Tweet reply box…");
         const editor=await openReplyComposer(tweet);
         if(!editor){setStatus("❌ Reply composer for this Tweet was not found","err");busy=false;return;}
-        const result=await insertReplyText(editor,reply);
-        if(!result.ok){setStatus("❌ "+result.error,"err");busy=false;return;}
+        const result=await insertIntoComposer(editor,reply);
+        if(!result.ok){
+          setStatus("❌ "+result.error,"err");
+          busy=false;
+          return;
+        }
         setStatus("✓ Reply inserted","ok");
-        await sleep(500);close();
+        await sleep(500);
+        close();
       };
       wrap.appendChild(b);
     });
