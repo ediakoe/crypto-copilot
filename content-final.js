@@ -145,48 +145,6 @@
   function fireInput(editor,text){try{editor.dispatchEvent(new InputEvent('beforeinput',{bubbles:true,cancelable:true,inputType:'insertText',data:text}));}catch{} try{editor.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:text}));}catch{editor.dispatchEvent(new Event('input',{bubbles:true}))}}
   async function insertIntoComposer(editor,text){if(!editor||!isVisible(editor))return {ok:false,error:'Editor is not visible'};if(editorText(editor))return {ok:false,error:'Composer is not empty'};const expected=normalizeText(text);selectAllEditorContent(editor);try{if(document.execCommand('insertText',false,text))fireInput(editor,text)}catch{}await sleep(250);let actual=editorText(editor);if(actual===expected)return {ok:true,actualText:actual};try{selectAllEditorContent(editor);const sel=window.getSelection(),range=sel.getRangeAt(0);range.deleteContents();const node=document.createTextNode(text);range.insertNode(node);range.setStartAfter(node);range.collapse(true);sel.removeAllRanges();sel.addRange(range);fireInput(editor,text)}catch(e){return {ok:false,error:e?.message||'Composer insertion failed'}}await sleep(350);actual=editorText(editor);return actual===expected?{ok:true,actualText:actual}:{ok:false,error:`X did not accept the text. Composer contains: ${actual||'(empty)'}`};}
 
-  async function insertReplyText(editor,text){
-    if(!editor||!isVisible(editor)||!editor.isContentEditable)return {ok:false,error:'Reply editor is not editable'};
-    if(editorText(editor))return {ok:false,error:'Reply composer is not empty'};
-    editor.focus();
-    // Exactly one active insertion path: never execute another insertion
-    // method after X has accepted any text.
-    try{
-      const sel=window.getSelection();
-      const range=document.createRange();
-      range.selectNodeContents(editor);
-      range.collapse(false);
-      sel.removeAllRanges();
-      sel.addRange(range);
-      const dt=new DataTransfer();
-      dt.setData('text/plain',text);
-      editor.dispatchEvent(new ClipboardEvent('paste',{bubbles:true,cancelable:true,clipboardData:dt}));
-    }catch{}
-    await sleep(450);
-    let actual=editorText(editor);
-    if(actual){
-      editor.focus();
-      return {ok:true,actualText:actual};
-    }
-    // Paste inserted nothing, so one native fallback is safe.
-    try{
-      editor.focus();
-      const sel=window.getSelection();
-      const range=document.createRange();
-      range.selectNodeContents(editor);
-      range.collapse(false);
-      sel.removeAllRanges();
-      sel.addRange(range);
-      document.execCommand('insertText',false,text);
-    }catch{}
-    await sleep(450);
-    actual=editorText(editor);
-    if(actual){
-      editor.focus();
-      return {ok:true,actualText:actual};
-    }
-    return {ok:false,error:'X did not accept the reply. Composer is still empty'};
-  }
   function close(){panel?.remove();panel=null;currentTweet=null;currentFab=null;busy=false;}
   function position(){if(!panel||!currentFab)return;const r=currentFab.getBoundingClientRect(),w=Math.min(370,innerWidth-20),h=panel.offsetHeight||420;let top=r.bottom+8;if(top+h>innerHeight-10)top=r.top-h-8;panel.style.left=Math.max(10,Math.min(r.left,innerWidth-w-10))+'px';panel.style.top=Math.max(10,Math.min(top,innerHeight-h-10))+'px';}
   function setStatus(msg,type=''){const el=panel?.querySelector('.ccp406-status');if(el){el.textContent=msg;el.className='ccp406-status '+type;position();}}
@@ -194,123 +152,16 @@
   function action(icon,title,desc,fn){const b=document.createElement('button');b.type='button';b.className='ccp406-btn';b.innerHTML=`<span class="ccp406-icon">${icon}</span><strong>${esc(title)}</strong><span>${esc(desc)}</span>`;b.onclick=e=>{e.preventDefault();e.stopPropagation();fn()};return b;}
   function askAI(messages,temperature=.82){return new Promise(resolve=>{let done=false;const timer=setTimeout(()=>{if(!done){done=true;resolve({ok:false,error:'AI request timed out'})}},30000);chrome.runtime.sendMessage({type:'CCP_AI',temperature,messages},r=>{if(done)return;done=true;clearTimeout(timer);if(chrome.runtime.lastError)return resolve({ok:false,error:chrome.runtime.lastError.message});resolve(r?.ok?{ok:true,text:String(r.text||'').trim()}:{ok:false,error:r?.error||'AI request failed'})})})}
   const replySystem='Write one short natural human Crypto Twitter reply. Never echo, paraphrase or summarize the source Tweet. Exactly ONE fitting emoji. No hashtags. No quotes. Output only the reply.';
-  async function smartReply(tweet){if(busy)return;busy=true;const source=tweetText(tweet);if(!source){setStatus('❌ Tweet text not found','err');busy=false;return;}loading('Generating natural reply…');let r=await askAI([{role:'system',content:replySystem},{role:'user',content:`Create ONE smart reaction to this Tweet. Fresh opinion, observation or question. Under 25 words. Exactly one natural emoji.\n\nSOURCE:\n${source}`}]);let reply=r.ok?cleanReply(r.text,source):'';if(!reply){r=await askAI([{role:'system',content:replySystem},{role:'user',content:`Create a completely different reaction with different vocabulary and sentence structure. Do not reuse wording from the Tweet. Under 25 words. Exactly one natural emoji.\n\nSOURCE:\n${source}`}],.95);reply=r.ok?cleanReply(r.text,source):'';}if(!reply){setStatus(`❌ ${r.error||'Generated reply rejected'}`,'err');busy=false;return;}loading('Opening THIS Tweet reply box…');const editor=await openReplyComposer(tweet);if(!editor){setStatus('❌ Reply composer for this Tweet was not found','err');busy=false;return;}const result=await insertReplyText(editor,reply);if(!result.ok){setStatus(`❌ ${result.error}`,'err');busy=false;return;}setStatus('✓ Reply inserted','ok');await sleep(500);close();}
-  async function opportunityRadar(tweet){
-    if(busy)return;
-    busy=true;
-    const source=tweetText(tweet);
-    if(!source){setStatus("❌ Tweet text not found","err");busy=false;return;}
-    loading("Analyzing opportunity + creating replies…");
-    const system="Analyze this crypto Tweet and return EXACTLY 5 lines, no markdown: line1 LEVEL=HIGH or MEDIUM or LOW; line2 STYLE=ANALYTICAL or MEME or CONTROVERSIAL; line3 REASON=under 12 words; line4 ANALYTICAL=one reply under 25 words with exactly one emoji; line5 MEME=one reply under 25 words with exactly one emoji; then line6 CONTROVERSIAL=one reply under 25 words with exactly one emoji. Replies must be natural, fresh, non-repetitive, and must not echo or paraphrase the Tweet. No hashtags.";
-    const user="Tweet:\n"+source;
-    const r=await askAI([{role:"system",content:system},{role:"user",content:user}],.55);
-    if(!r.ok){setStatus("❌ "+r.error,"err");busy=false;return;}
-    const lines=String(r.text||"").replace(/```/g,"").split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
-    const getVal=(prefix)=>{const line=lines.find(x=>x.toUpperCase().startsWith(prefix));return line?line.slice(prefix.length).replace(/^\s*[:=]\s*/,"").trim():"";};
-    const levelMap={HIGH:"High Opportunity",MEDIUM:"Medium Opportunity",LOW:"Low Opportunity"};
-    const styleMap={ANALYTICAL:"Analytical",MEME:"Meme",CONTROVERSIAL:"Controversial"};
-    const level=levelMap[String(getVal("LEVEL")).toUpperCase()];
-    const style=styleMap[String(getVal("STYLE")).toUpperCase()];
-    const reason=getVal("REASON");
-    const ideas={analytical:getVal("ANALYTICAL"),meme:getVal("MEME"),controversial:getVal("CONTROVERSIAL")};
-    if(!level||!style||!reason||!ideas.analytical||!ideas.meme||!ideas.controversial){setStatus("❌ Opportunity response was incomplete","err");busy=false;return;}
-    const body=panel?.querySelector(".ccp406-body");
-    if(!body){busy=false;return;}
-    const levelIcon=level==="High Opportunity"?"🔥":level==="Medium Opportunity"?"🟡":"⚪";
-    const styleIcon=style==="Analytical"?"🧠":style==="Meme"?"😂":"🔥";
-    const rows=[["🧠","Analytical",ideas.analytical],["😂","Meme",ideas.meme],["🔥","Controversial",ideas.controversial]];
-    body.innerHTML='<div class="ccp406-opportunity" style="padding:4px 3px 10px"><div style="font-size:10px;font-weight:850;letter-spacing:.11em;color:#727d90">⚡ OPPORTUNITY</div><div style="font-size:21px;font-weight:900;margin-top:7px">'+esc(levelIcon+" "+level)+'</div><div style="margin-top:12px;color:#8d99ab;font-size:9px;font-weight:800;letter-spacing:.1em">BEST REPLY STYLE</div><div style="font-size:15px;font-weight:850;margin-top:4px">'+esc(styleIcon+" "+style)+'</div><div style="margin-top:10px;color:#b9c3d1;font-size:11px;line-height:1.55">'+esc(reason)+'</div></div><div style="padding:4px 3px 8px;color:#727d90;font-size:9px;font-weight:800;letter-spacing:.13em">CHOOSE YOUR REPLY</div><div class="ccp406-ideas"></div><button type="button" class="ccp406-back" id="opp-back">← Back</button>';
-    const wrap=body.querySelector(".ccp406-ideas");
-    rows.forEach(function(row){
-      const icon=row[0],title=row[1],rawText=row[2],clean=cleanReply(rawText,source);
-      const b=document.createElement("button");
-      b.type="button";b.className="ccp406-idea";
-      b.innerHTML='<div class="ccp406-idea-head"><span class="ccp406-idea-title">'+esc(icon+" "+title)+'</span><span class="ccp406-idea-hint">CLICK TO INSERT</span></div><div class="ccp406-idea-copy">'+esc(clean||rawText)+'</div>';
-      b.onclick=async function(ev){
-        ev.preventDefault();ev.stopPropagation();
-        if(busy)return;
-        const reply=cleanReply(rawText,source);
-        if(!reply){setStatus("❌ This suggestion was rejected","err");return;}
-        busy=true;
-        loading("Opening THIS Tweet reply box…");
-        const editor=await openReplyComposer(tweet);
-        if(!editor){setStatus("❌ Reply composer for this Tweet was not found","err");busy=false;return;}
-        const result=await insertIntoComposer(editor,reply);
-        if(!result.ok){setStatus("❌ "+result.error,"err");busy=false;return;}
-        setStatus("✓ Reply inserted","ok");
-        await sleep(500);
-        close();
-      };
-      wrap.appendChild(b);
-    });
-    body.querySelector("#opp-back").onclick=function(){busy=false;openPanel(tweet,currentFab);};
-    setStatus("✓ Opportunity + 3 reply ideas ready","ok");
-    busy=false;
-    position();
-  }
-  async function replyIdeas(tweet){
-    if(busy)return;
-    busy=true;
-    const source=tweetText(tweet);
-    if(!source){setStatus("❌ Tweet text not found","err");busy=false;return;}
-    loading("Creating 3 reply ideas…");
-    const system="You are generating reply choices for a crypto Twitter user. Return ONLY valid JSON with keys analytical, meme, controversial. Each value must be ONE short natural reply under 25 words, no hashtags, no quotation marks, exactly one fitting emoji, and must NOT echo, paraphrase, or summarize the source Tweet.";
-    const user="Create three clearly different replies to this Tweet.\n\n1) analytical: thoughtful/serious\n2) meme: funny/memey but natural\n3) controversial: opinionated/debatable without being abusive\n\nSOURCE:\n"+source;
-    const r=await askAI([{role:"system",content:system},{role:"user",content:user}],.9);
-    if(!r.ok){setStatus("❌ "+r.error,"err");busy=false;return;}
-    let ideas=null;
-    try{
-      const raw=String(r.text||"").replace(/^```json\s*/i,"").replace(/\s*```$/,"").trim();
-      ideas=JSON.parse(raw);
-    }catch{}
-    if(!ideas||typeof ideas!=="object"){setStatus("❌ Could not parse reply ideas","err");busy=false;return;}
-    const rows=[["🧠","Analytical",ideas.analytical],["😂","Meme",ideas.meme],["🔥","Controversial",ideas.controversial]];
-    const body=panel?.querySelector(".ccp406-body");
-    if(!body){busy=false;return;}
-    body.innerHTML='<div style="padding:4px 3px 8px;color:#727d90;font-size:9px;font-weight:800;letter-spacing:.13em">CHOOSE YOUR REPLY</div><div class="ccp406-ideas"></div><button type="button" class="ccp406-back" id="ideas-back">← Back</button>';
-    const wrap=body.querySelector(".ccp406-ideas");
-    rows.forEach(function(row){
-      const icon=row[0],title=row[1],rawText=String(row[2]||"").trim(),clean=cleanReply(rawText,source);
-      const b=document.createElement("button");
-      b.type="button";b.className="ccp406-idea";
-      b.innerHTML='<div class="ccp406-idea-head"><span class="ccp406-idea-title">'+esc(icon+" "+title)+'</span><span class="ccp406-idea-hint">CLICK TO INSERT</span></div><div class="ccp406-idea-copy">'+esc(clean||rawText||"No suggestion generated")+'</div>';
-      b.onclick=async function(e){
-        e.preventDefault();e.stopPropagation();
-        if(busy)return;
-        const reply=cleanReply(rawText,source);
-        if(!reply){setStatus("❌ This suggestion was rejected","err");return;}
-        busy=true;
-        loading("Opening THIS Tweet reply box…");
-        const editor=await openReplyComposer(tweet);
-        if(!editor){setStatus("❌ Reply composer for this Tweet was not found","err");busy=false;return;}
-        const result=await insertIntoComposer(editor,reply);
-        if(!result.ok){
-          setStatus("❌ "+result.error,"err");
-          busy=false;
-          return;
-        }
-        setStatus("✓ Reply inserted","ok");
-        await sleep(500);
-        close();
-      };
-      wrap.appendChild(b);
-    });
-    body.querySelector("#ideas-back").onclick=function(){busy=false;openPanel(tweet,currentFab);};
-    setStatus("✓ 3 reply styles ready","ok");
-    busy=false;
-    position();
-  }
-  async function translate(tweet){if(busy)return;busy=true;const source=tweetText(tweet);if(!source){setStatus('❌ Tweet text not found','err');busy=false;return;}loading('Translating…');const r=await askAI([{role:'system',content:'Translate this Crypto Twitter text into natural fluent Persian. Preserve usernames, names, tickers and crypto terminology. Output only the translation.'},{role:'user',content:source}],.25);if(!r.ok){setStatus(`❌ ${r.error}`,'err');busy=false;return;}const body=panel?.querySelector('.ccp406-body');if(body){body.innerHTML='<div class="ccp406-translation-head">PERSIAN TRANSLATION</div><div class="ccp406-translation">'+esc(r.text)+'</div><button type="button" class="ccp406-back" id="translation-done">✓ Done</button>';body.querySelector('#translation-done').onclick=()=>close();position();}setStatus('✓ Translation ready','ok');busy=false;}
-  async function rewrite(tweet){if(busy)return;busy=true;loading('Rewriting…');const r=await askAI([{role:'system',content:'Rewrite this crypto post to sound sharper, clearer and genuinely human. Preserve meaning. Exactly one tasteful emoji. Output only the rewritten post.'},{role:'user',content:tweetText(tweet)}],.78);if(!r.ok){setStatus(`❌ ${r.error}`,'err');busy=false;return;}close();const e=await openNewPost();if(!e){busy=false;return;}const out=await insertIntoComposer(e,r.text);if(!out.ok)console.warn('Crypto Copilot rewrite:',out.error);busy=false;}
-  async function thread(tweet){if(busy)return;busy=true;loading('Building 3-post thread…');const r=await askAI([{role:'system',content:'Create exactly 3 connected Crypto Twitter posts. Number them 1/3, 2/3, 3/3. Human, concise and non-repetitive. One fitting emoji per post. Output only the three posts separated by blank lines.'},{role:'user',content:tweetText(tweet)}],.8);if(!r.ok){setStatus(`❌ ${r.error}`,'err');busy=false;return;}close();const e=await openNewPost();if(!e){busy=false;return;}const out=await insertIntoComposer(e,r.text);if(!out.ok)console.warn('Crypto Copilot thread:',out.error);busy=false;}
-  async function quote(tweet){if(busy)return;busy=true;loading('Writing quote comment…');const r=await askAI([{role:'system',content:'Write one fresh quote-tweet comment reacting to the idea. Do not restate or paraphrase the source. Under 25 words. Exactly one fitting emoji. No hashtags. Output only the comment.'},{role:'user',content:tweetText(tweet)}],.85);if(!r.ok){setStatus(`❌ ${r.error}`,'err');busy=false;return;}const rb=retweetButton(tweet);if(!rb){setStatus('❌ Quote button not found','err');busy=false;return;}rb.click();const end=Date.now()+5000;let item=null;while(Date.now()<end&&!item){item=[...document.querySelectorAll('[role="menuitem"],[role="option"]')].find(x=>/quote/i.test((x.innerText||x.getAttribute('aria-label')||'').trim()));if(!item)await sleep(120);}if(!item){setStatus('❌ Quote option not found','err');busy=false;return;}item.click();const editor=await openDialogEditor(10000);if(!editor){setStatus('❌ Quote composer not found','err');busy=false;return;}const out=await insertIntoComposer(editor,ensureOneEmoji(r.text,tweetText(tweet)));if(!out.ok){setStatus(`❌ ${out.error}`,'err');busy=false;return;}setStatus('✓ Quote inserted and verified','ok');await sleep(500);close();}
-  function visibleTrends(){const out=[],seen=new Set();for(const a of [...document.querySelectorAll('a[href*="/search?q="]')]){const t=normalizeText(a.innerText||a.textContent);if(!t||t.length<2||t.length>120||/show more|search|what's happening/i.test(t)||seen.has(t))continue;seen.add(t);out.push(t);if(out.length>=8)break;}return out;}
-  async function trendRadar(){const trends=visibleTrends();if(!trends.length){setStatus('⚠️ Open X Explore → Trending first','err');return;}const body=panel.querySelector('.ccp406-body');body.innerHTML=`<div style="padding:4px;color:#727d90;font-size:9px;font-weight:800;letter-spacing:.13em">VISIBLE X TRENDS</div>`+trends.map((t,i)=>`<button type="button" class="ccp406-back" data-t="${i}" style="margin-top:7px">📈 ${esc(t)}</button>`).join('');body.querySelectorAll('[data-t]').forEach(b=>b.onclick=async()=>{if(busy)return;busy=true;loading('Writing trend post…');const r=await askAI([{role:'system',content:'Write one natural Crypto Twitter post about the visible trend. Do not invent facts. Exactly one fitting emoji. Output only the post.'},{role:'user',content:`Visible trend: ${trends[Number(b.dataset.t)]}`}],.82);if(!r.ok){setStatus(`❌ ${r.error}`,'err');busy=false;return;}close();const e=await openNewPost();if(e){const out=await insertIntoComposer(e,r.text);if(!out.ok)console.warn('Crypto Copilot trend:',out.error);}busy=false;});position();}
-
-  function replyUI(tweet){ smartReply(tweet, "smart"); }
-  function openPanel(tweet,fab){close();currentTweet=tweet;currentFab=fab;panel=document.createElement('div');panel.className='ccp406-panel';const preview=tweetText(tweet);panel.innerHTML=`<div class="ccp406-head"><div class="ccp406-brand"><div class="ccp406-logo"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjgiIGhlaWdodD0iMTI4IiB2aWV3Qm94PSIwIDAgMTI4IDEyOCI+PC9zdmc+" alt=""></div><div><div class="ccp406-title">Crypto Copilot</div><div class="ccp406-sub">Natural AI tools for X</div></div></div></div>${preview?`<div class="ccp406-context">${esc(preview.slice(0,180))}${preview.length>180?'…':''}</div>`:''}<div class="ccp406-status">Connecting to Central AI…</div><div class="ccp406-body"><div style="padding:4px 3px 8px;color:#727d90;font-size:9px;font-weight:800;letter-spacing:.13em">AI TOOLS</div><div class="ccp406-grid" id="grid"></div></div>`;document.body.appendChild(panel);const g=panel.querySelector('#grid');g.appendChild(action('⚡','Smart Reply','Generate & insert automatically',()=>replyUI(tweet)));g.appendChild(action('🎯','Reply Opportunity','Find opportunity + 3 reply styles',()=>opportunityRadar(tweet)));g.appendChild(action('🔁','Smart Quote','Fresh quote comment',()=>quote(tweet)));g.appendChild(action('🌍','Translate','Natural Persian',()=>translate(tweet)));g.appendChild(action('✎','Rewrite','Sharper new post',()=>rewrite(tweet)));g.appendChild(action('🧵','Thread','Three connected posts',()=>thread(tweet)));g.appendChild(action('📈','Trend Radar','Use visible X trends',()=>trendRadar()));setStatus('✓ Central AI ready','ok');position();}
-  function attach(tweet){if(!tweet||tweet.querySelector('.ccp406-fab'))return;const reply=replyButton(tweet);if(!reply)return;let host=tweet.querySelector('[role="group"]')||reply.closest('[role="group"]');if(!host){let p=reply.parentElement;for(let i=0;i<5&&p;i++,p=p.parentElement){const buttons=p.querySelectorAll('button').length;if(buttons>=2){host=p;break;}}}if(!host)return;const b=document.createElement('button');b.className='ccp406-fab';b.type='button';b.title='Crypto Copilot';b.setAttribute('aria-label','Crypto Copilot');b.innerHTML='<img src="'+chrome.runtime.getURL('tweet-icon.png')+'" alt="" aria-hidden="true">';b.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();openPanel(tweet,b)},{capture:true});host.appendChild(b);}
-  function scan(){document.querySelectorAll('article[data-testid="tweet"],article').forEach(attach);}
-  scan();new MutationObserver(scan).observe(document.body,{childList:true,subtree:true});window.addEventListener('scroll',position,true);window.addEventListener('resize',position);document.addEventListener('keydown',e=>{if(e.key==='Escape'&&panel)close()});document.addEventListener('click',e=>{if(panel&&!panel.contains(e.target)&&!e.target.closest('.ccp406-fab'))close()});
-  console.log('🚀 Crypto Copilot Central AI 4.0.6 loaded');
+  async function smartReply(tweet){if(busy)return;busy=true;const source=tweetText(tweet);if(!source){setStatus('❌ Tweet text not found','err');busy=false;return;}loading('Generating natural reply…');let r=await askAI([{role:'system',content:replySystem},{role:'user',content:`Create ONE smart reaction to this Tweet. Fresh opinion, observation or question. Under 25 words. Exactly one natural emoji.\n\nSOURCE:\n${source}`}]);let reply=r.ok?cleanReply(r.text,source):'';if(!reply){r=await askAI([{role:'system',content:replySystem},{role:'user',content:`Create a completely different reaction with different vocabulary and sentence structure. Do not reuse wording from the Tweet. Under 25 words. Exactly one natural emoji.\n\nSOURCE:\n${source}`}],.95);reply=r.ok?cleanReply(r.text,source):'';}if(!reply){setStatus(`❌ ${r.error||'Generated reply rejected'}`,'err');busy=false;return;}loading('Opening THIS Tweet reply box…');const editor=await openReplyComposer(tweet);if(!editor){setStatus('❌ Reply composer for this Tweet was not found','err');busy=false;return;}const result=await insertIntoComposer(editor,reply);if(!result.ok){setStatus(`❌ ${result.error}`,'err');busy=false;return;}setStatus('✓ Reply inserted','ok');await sleep(500);close();}
+  async function opportunityRadar(tweet){if(busy)return;busy=true;const source=tweetText(tweet);if(!source){setStatus('❌ Tweet text not found','err');busy=false;return;}loading('Analyzing opportunity + creating replies…');const system='Analyze this crypto Tweet and return EXACTLY 6 lines, no markdown: LEVEL=HIGH or MEDIUM or LOW; STYLE=ANALYTICAL or MEME or CONTROVERSIAL; REASON=under 12 words; ANALYTICAL=one reply under 25 words with exactly one emoji; MEME=one reply under 25 words with exactly one emoji; CONTROVERSIAL=one reply under 25 words with exactly one emoji. Replies must be natural, fresh, non-repetitive, and must not echo or paraphrase the Tweet. No hashtags.';const r=await askAI([{role:'system',content:system},{role:'user',content:'Tweet:\n'+source}],.55);if(!r.ok){setStatus('❌ '+r.error,'err');busy=false;return}const lines=String(r.text||'').replace(/```/g,'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);const getVal=prefix=>{const line=lines.find(x=>new RegExp('^'+prefix+'\\s*[:=]','i').test(x));return line?line.replace(new RegExp('^'+prefix+'\\s*[:=]','i'),'').trim():''};const levelMap={HIGH:'High Opportunity',MEDIUM:'Medium Opportunity',LOW:'Low Opportunity'},styleMap={ANALYTICAL:'Analytical',MEME:'Meme',CONTROVERSIAL:'Controversial'},level=levelMap[String(getVal('LEVEL')).toUpperCase()],style=styleMap[String(getVal('STYLE')).toUpperCase()],reason=getVal('REASON'),ideas={analytical:getVal('ANALYTICAL'),meme:getVal('MEME'),controversial:getVal('CONTROVERSIAL')};if(!level||!style||!reason||!ideas.analytical||!ideas.meme||!ideas.controversial){setStatus('❌ Opportunity response was incomplete','err');busy=false;return}const body=panel?.querySelector('.ccp406-body');if(!body){busy=false;return}const levelIcon=level==='High Opportunity'?'🔥':level==='Medium Opportunity'?'🟡':'⚪',styleIcon=style==='Analytical'?'🧠':style==='Meme'?'😂':'🔥';body.innerHTML='<div style="padding:4px 3px 10px"><div style="font-size:10px;font-weight:850;letter-spacing:.11em;color:#727d90">⚡ OPPORTUNITY</div><div style="font-size:21px;font-weight:900;margin-top:7px">'+esc(levelIcon+' '+level)+'</div><div style="margin-top:12px;color:#8d99ab;font-size:9px;font-weight:800;letter-spacing:.1em">BEST REPLY STYLE</div><div style="font-size:15px;font-weight:850;margin-top:4px">'+esc(styleIcon+' '+style)+'</div><div style="margin-top:10px;color:#b9c3d1;font-size:11px;line-height:1.55">'+esc(reason)+'</div></div><div style="padding:4px 3px 8px;color:#727d90;font-size:9px;font-weight:800;letter-spacing:.13em">CHOOSE YOUR REPLY</div><div class="ccp406-ideas"></div><button type="button" class="ccp406-back" id="opp-back">← Back</button>';const wrap=body.querySelector('.ccp406-ideas');[['🧠','Analytical',ideas.analytical],['😂','Meme',ideas.meme],['🔥','Controversial',ideas.controversial]].forEach(row=>{const b=document.createElement('button');b.type='button';b.className='ccp406-idea';b.innerHTML='<div class="ccp406-idea-head"><span class="ccp406-idea-title">'+esc(row[0]+' '+row[1])+'</span><span class="ccp406-idea-hint">CLICK TO INSERT</span></div><div class="ccp406-idea-copy">'+esc(cleanReply(row[2],source)||row[2])+'</div>';b.onclick=async ev=>{ev.preventDefault();ev.stopPropagation();if(busy)return;const reply=cleanReply(row[2],source);if(!reply){setStatus('❌ This suggestion was rejected','err');return}busy=true;loading('Opening THIS Tweet reply box…');const editor=await openReplyComposer(tweet);if(!editor){setStatus('❌ Reply composer for this Tweet was not found','err');busy=false;return}const result=await insertIntoComposer(editor,reply);if(!result.ok){setStatus('❌ '+result.error,'err');busy=false;return}setStatus('✓ Reply inserted','ok');await sleep(500);close()};wrap.appendChild(b)});body.querySelector('#opp-back').onclick=()=>{busy=false;openPanel(tweet,currentFab)};setStatus('✓ Opportunity + 3 reply ideas ready','ok');busy=false;position()}
+  async function translate(tweet){if(busy)return;busy=true;const source=tweetText(tweet);if(!source){setStatus('❌ Tweet text not found','err');busy=false;return}loading('Translating…');const r=await askAI([{role:'system',content:'Translate this Crypto Twitter text into natural fluent Persian. Preserve usernames, names, tickers and crypto terminology. Output only the translation.'},{role:'user',content:source}],.25);if(!r.ok){setStatus(`❌ ${r.error}`,'err');busy=false;return}const body=panel?.querySelector('.ccp406-body');if(body){body.innerHTML='<div class="ccp406-translation-head">PERSIAN TRANSLATION</div><div class="ccp406-translation">'+esc(r.text)+'</div><button type="button" class="ccp406-back" id="translation-done">✓ Done</button>';body.querySelector('#translation-done').onclick=()=>close();position()}setStatus('✓ Translation ready','ok');busy=false}
+  async function rewrite(tweet){if(busy)return;busy=true;loading('Rewriting…');const r=await askAI([{role:'system',content:'Rewrite this crypto post to sound sharper, clearer and genuinely human. Preserve meaning. Exactly one tasteful emoji. Output only the rewritten post.'},{role:'user',content:tweetText(tweet)}],.78);if(!r.ok){setStatus(`❌ ${r.error}`,'err');busy=false;return}close();const e=await openNewPost();if(!e){busy=false;return}const out=await insertIntoComposer(e,r.text);if(!out.ok)console.warn('Crypto Copilot rewrite:',out.error);busy=false}
+  async function thread(tweet){if(busy)return;busy=true;loading('Building 3-post thread…');const r=await askAI([{role:'system',content:'Create exactly 3 connected Crypto Twitter posts. Number them 1/3, 2/3, 3/3. Human, concise and non-repetitive. One fitting emoji per post. Output only the three posts separated by blank lines.'},{role:'user',content:tweetText(tweet)}],.8);if(!r.ok){setStatus(`❌ ${r.error}`,'err');busy=false;return}close();const e=await openNewPost();if(!e){busy=false;return}const out=await insertIntoComposer(e,r.text);if(!out.ok)console.warn('Crypto Copilot thread:',out.error);busy=false}
+  async function quote(tweet){if(busy)return;busy=true;loading('Writing quote comment…');const r=await askAI([{role:'system',content:'Write one fresh quote-tweet comment reacting to the idea. Do not restate or paraphrase the source. Under 25 words. Exactly one fitting emoji. No hashtags. Output only the comment.'},{role:'user',content:tweetText(tweet)}],.85);if(!r.ok){setStatus(`❌ ${r.error}`,'err');busy=false;return}const rb=retweetButton(tweet);if(!rb){setStatus('❌ Quote button not found','err');busy=false;return}rb.click();const end=Date.now()+5000;let item=null;while(Date.now()<end&&!item){item=[...document.querySelectorAll('[role="menuitem"],[role="option"]')].find(x=>/quote/i.test((x.innerText||x.getAttribute('aria-label')||'').trim()));if(!item)await sleep(120)}if(!item){setStatus('❌ Quote option not found','err');busy=false;return}item.click();const editor=await openDialogEditor(10000);if(!editor){setStatus('❌ Quote composer not found','err');busy=false;return}const out=await insertIntoComposer(editor,ensureOneEmoji(r.text,tweetText(tweet)));if(!out.ok){setStatus(`❌ ${out.error}`,'err');busy=false;return}setStatus('✓ Quote inserted and verified','ok');await sleep(500);close()}
+  function visibleTrends(){const out=[];document.querySelectorAll('a[href*="/explore/tabs/for-you"],a[href*="/search?q="]').forEach(a=>{const txt=(a.innerText||'').trim();if(txt&&txt.length<80)out.push(txt)});return [...new Set(out)].slice(0,8)}
+  async function trendRadar(){if(busy)return;busy=true;loading('Scanning visible trends…');const trends=visibleTrends();if(!trends.length){setStatus('❌ No visible trends found','err');busy=false;return}const r=await askAI([{role:'system',content:'Rank these visible Twitter trends for crypto relevance. Return a concise numbered list with a one-line reason for each. No markdown table.'},{role:'user',content:trends.join('\n')}],.5);if(!r.ok){setStatus('❌ '+r.error,'err');busy=false;return}const body=panel?.querySelector('.ccp406-body');if(body){body.innerHTML='<div style="white-space:pre-wrap;line-height:1.6;color:#dfe5ee">'+esc(r.text)+'</div><button type="button" class="ccp406-back" id="trend-done">✓ Done</button>';body.querySelector('#trend-done').onclick=()=>close();position()}setStatus('✓ Trend radar ready','ok');busy=false}
+  function openPanel(tweet,fab){if(panel)close();currentTweet=tweet;currentFab=fab;panel=document.createElement('div');panel.className='ccp406-panel';panel.innerHTML='<div class="ccp406-head"><div class="ccp406-brand"><div class="ccp406-logo"><img src="'+chrome.runtime.getURL('icon128.png')+'"/></div><div><div class="ccp406-title">Crypto Copilot</div><div class="ccp406-sub">Central AI • X Assistant</div></div></div></div><div class="ccp406-status">Ready</div><div class="ccp406-context">'+esc(tweetText(tweet))+'</div><div class="ccp406-body"><div class="ccp406-grid"></div></div>';document.body.appendChild(panel);const g=panel.querySelector('.ccp406-grid');g.appendChild(action('⚡','Smart Reply','Generate & insert automatically',()=>smartReply(tweet)));g.appendChild(action('🎯','Reply Opportunity','Find opportunity + 3 reply styles',()=>opportunityRadar(tweet)));g.appendChild(action('💬','Smart Quote','Write a fresh quote comment',()=>quote(tweet)));g.appendChild(action('🇮🇷','Translate','Translate to Persian',()=>translate(tweet)));g.appendChild(action('✍️','Rewrite','Rewrite into a sharper post',()=>rewrite(tweet)));g.appendChild(action('🧵','Thread','Build a 3-post thread',()=>thread(tweet)));g.appendChild(action('📈','Trend Radar','Scan visible trends',()=>trendRadar()));position()}
+  function attach(tweet){if(!tweet||tweet.querySelector('.ccp406-fab'))return;const reply=replyButton(tweet);if(!reply)return;let host=tweet.querySelector('[role="group"]')||reply.closest('[role="group"]');if(!host)return;const b=document.createElement('button');b.type='button';b.className='ccp406-fab';b.title='Crypto Copilot';b.setAttribute('aria-label','Crypto Copilot');b.innerHTML='<img alt="Crypto Copilot" src="'+chrome.runtime.getURL('tweet-icon.png')+'">';b.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();openPanel(tweet,b)},{capture:true});host.appendChild(b)}
+  function scan(){document.querySelectorAll('article').forEach(attach)}
+  scan();new MutationObserver(scan).observe(document.body,{childList:true,subtree:true});window.addEventListener('resize',position);window.addEventListener('scroll',()=>{if(panel)position()},{passive:true});
 })();
