@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Crypto Copilot Central AI",
-  "version": "2.2.4",
+  "version": "2.2.5",
   "description": "Premium AI copilot for X powered by a centralized Cloudflare Worker",
   "permissions": [],
   "host_permissions": [
@@ -14,6 +14,7 @@
   },
   "action": {
     "default_title": "Crypto Copilot Central AI",
+    "default_popup": "popup.html",
     "default_icon": {
       "16": "icon16.png",
       "48": "icon48.png",
@@ -35,7 +36,10 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "tweet-icon.png"
+        "tweet-icon.png",
+        "icon16.png",
+        "icon48.png",
+        "icon128.png"
       ],
       "matches": [
         "https://x.com/*",

@@ -1,5 +1,13 @@
 const CENTRAL_AI_URL = "https://crypto-copilot-api.diako1.workers.dev/";
 
+function errorText(data, status) {
+  const raw = data?.error;
+  if (typeof raw === "string" && raw.trim()) return raw.trim();
+  if (raw && typeof raw === "object") return raw.message || raw.code || JSON.stringify(raw);
+  if (status) return `Central AI error (${status})`;
+  return "Central AI request failed";
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === "CCP_HEALTH") {
     (async () => {
@@ -36,15 +44,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
       const data = await response.json().catch(() => ({}));
 
-      if (!response.ok || data?.error) {
-        sendResponse({
-          ok: false,
-          error: data?.error || `Central AI error (${response.status})`
-        });
+      if (!response.ok || data?.error || data?.ok === false) {
+        sendResponse({ ok: false, error: errorText(data, response.status) });
         return;
       }
 
-      sendResponse({ ok: true, text: String(data?.text || "").trim() });
+      const text = String(data?.text || data?.choices?.[0]?.message?.content || "").trim();
+      if (!text) {
+        sendResponse({ ok: false, error: "Central AI returned an empty reply" });
+        return;
+      }
+      sendResponse({ ok: true, text });
     } catch (error) {
       console.error("Crypto Copilot central AI request failed", error);
       sendResponse({

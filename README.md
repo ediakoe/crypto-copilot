@@ -1,9 +1,17 @@
 # Crypto Copilot
 
-## Verified 2.2.4 release
+Chrome extension for X (Twitter). AI calls go through the central worker `https://crypto-copilot-api.diako1.workers.dev/`. No API key is stored in the extension.
 
-Use the verified ZIP package below for installation:
+## Install
 
-`Crypto-Copilot-2.2.4-verified.zip`
+1. Download this repository and extract it.
+2. Open `chrome://extensions`.
+3. Enable Developer mode.
+4. Choose **Load unpacked** and select this folder (the folder that contains `manifest.json`).
+5. Open https://x.com and use the Crypto Copilot button on a tweet.
 
-Download it, extract the ZIP, then load the extracted `Crypto-Copilot-2.2.4` folder as an unpacked extension in your browser.
+Do not install `Crypto-Copilot-2.2.4-verified.zip`. That archive in the repository is corrupt and is no longer the install path.
+
+## Version
+
+2.2.5 loads only `content-final.js`. Older `content-v*.js` files are unused history and are not injected.
