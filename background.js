@@ -1,25 +1,16 @@
-const CENTRAL_AI_URL = "https://crypto-copilot-api.diako1.workers.dev/";
+const AI_URL = "https://text.pollinations.ai/";
 
-function errorText(data, status) {
-  const raw = data?.error;
-  if (typeof raw === "string" && raw.trim()) return raw.trim();
-  if (raw && typeof raw === "object") return raw.message || raw.code || JSON.stringify(raw);
-  if (status) return `Central AI error (${status})`;
-  return "Central AI request failed";
+function buildPrompt(messages) {
+  return (Array.isArray(messages) ? messages : [])
+    .map((m) => `${m.role || "user"}: ${m.content || ""}`)
+    .join("\n\n")
+    .slice(0, 6000);
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === "CCP_HEALTH") {
-    (async () => {
-      try {
-        const r = await fetch(CENTRAL_AI_URL, { method: "GET" });
-        const data = await r.json().catch(() => ({}));
-        sendResponse({ ok: r.ok && data?.ok === true, status: r.status, data });
-      } catch (error) {
-        sendResponse({ ok: false, status: 0, error: error?.message || "Worker unreachable" });
-      }
-    })();
-    return true;
+    sendResponse({ ok: true, status: 200, data: { ok: true, service: "Pollinations", version: "2.2.6" } });
+    return;
   }
 
   if (message?.type !== "CCP_AI") return;
@@ -31,36 +22,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ ok: false, error: "No AI messages supplied" });
         return;
       }
-
-      const response = await fetch(CENTRAL_AI_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: message.model || "openrouter/auto",
-          temperature: typeof message.temperature === "number" ? message.temperature : 0.82,
-          messages
-        })
-      });
-
-      const data = await response.json().catch(() => ({}));
-
-      if (!response.ok || data?.error || data?.ok === false) {
-        sendResponse({ ok: false, error: errorText(data, response.status) });
-        return;
-      }
-
-      const text = String(data?.text || data?.choices?.[0]?.message?.content || "").trim();
-      if (!text) {
-        sendResponse({ ok: false, error: "Central AI returned an empty reply" });
+      const prompt = buildPrompt(messages);
+      const response = await fetch(`${AI_URL}${encodeURIComponent(prompt)}`, { method: "GET" });
+      const text = (await response.text()).trim();
+      if (!response.ok || !text || text.startsWith("{")) {
+        sendResponse({ ok: false, error: text.slice(0, 180) || `AI error (${response.status})` });
         return;
       }
       sendResponse({ ok: true, text });
     } catch (error) {
-      console.error("Crypto Copilot central AI request failed", error);
-      sendResponse({
-        ok: false,
-        error: error?.message || "Central AI request failed"
-      });
+      sendResponse({ ok: false, error: error?.message || "AI request failed" });
     }
   })();
 

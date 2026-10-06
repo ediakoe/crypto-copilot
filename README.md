@@ -1,17 +1,11 @@
 # Crypto Copilot
 
-Chrome extension for X (Twitter). AI calls go through the central worker `https://crypto-copilot-api.diako1.workers.dev/`. No API key is stored in the extension.
+Chrome extension for X. Version 2.2.6 does not use an API key and does not call the old worker (`User not found`).
+
+AI requests go from the extension background script to `https://text.pollinations.ai/`.
 
 ## Install
 
-1. Download this repository and extract it.
-2. Open `chrome://extensions`.
-3. Enable Developer mode.
-4. Choose **Load unpacked** and select this folder (the folder that contains `manifest.json`).
-5. Open https://x.com and use the Crypto Copilot button on a tweet.
-
-Do not install `Crypto-Copilot-2.2.4-verified.zip`. That archive in the repository is corrupt and is no longer the install path.
-
-## Version
-
-2.2.5 loads only `content-final.js`. Older `content-v*.js` files are unused history and are not injected.
+1. Download this repository.
+2. Open `chrome://extensions`, enable Developer mode, and Load unpacked this folder.
+3. Reload the extension, then refresh https://x.com.

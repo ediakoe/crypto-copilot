@@ -1,7 +1,7 @@
 (() => {
   if (window.__cryptoCopilotCentralV406) return;
   window.__cryptoCopilotCentralV406 = true;
-  console.log('🚀 Crypto Copilot Central AI 2.2.5 loaded');
+  console.log('🚀 Crypto Copilot Central AI 2.2.6 loaded');
 
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   let panel = null;

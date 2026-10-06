@@ -7,18 +7,17 @@ function setStatus(text, type) {
 }
 
 function check() {
-  setStatus("Checking central AI…");
+  setStatus("Checking AI…");
   chrome.runtime.sendMessage({ type: "CCP_HEALTH" }, (response) => {
     if (chrome.runtime.lastError) {
       setStatus(chrome.runtime.lastError.message, "bad");
       return;
     }
     if (response?.ok) {
-      const version = response.data?.version ? ` (${response.data.version})` : "";
-      setStatus(`Central AI is online${version}. Open X and use the tweet button.`, "ok");
+      setStatus("Connected. No API key needed. Open X and use the tweet button.", "ok");
       return;
     }
-    setStatus(response?.error || "Central AI is offline.", "bad");
+    setStatus(response?.error || "AI is offline.", "bad");
   });
 }
 

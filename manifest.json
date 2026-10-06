@@ -1,13 +1,13 @@
 {
   "manifest_version": 3,
   "name": "Crypto Copilot Central AI",
-  "version": "2.2.5",
+  "version": "2.2.6",
   "description": "Premium AI copilot for X powered by a centralized Cloudflare Worker",
   "permissions": [],
   "host_permissions": [
     "https://x.com/*",
     "https://twitter.com/*",
-    "https://crypto-copilot-api.diako1.workers.dev/*"
+    "https://text.pollinations.ai/*"
   ],
   "background": {
     "service_worker": "background.js"
