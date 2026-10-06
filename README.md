@@ -1,8 +1,8 @@
 # Crypto Copilot
 
-Chrome extension for X. Version 2.2.6 does not use an API key and does not call the old worker (`User not found`).
+Chrome extension for X. Version 2.2.7 does not use an API key and does not call the old worker (`User not found`).
 
-AI requests go from the extension background script to `https://text.pollinations.ai/`.
+AI requests go from the extension background script to `https://devtoolbox-api.devtoolbox-api.workers.dev/`.
 
 ## Install
 
